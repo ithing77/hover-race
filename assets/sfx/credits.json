@@ -1,0 +1,116 @@
+{
+ "boom_1.ogg": {
+  "src": "impact/100-cc0-sfx/explosion.ogg",
+  "pack": "100 CC0 SFX",
+  "license": "CC0",
+  "url": "https://opengameart.org/content/100-cc0-sfx"
+ },
+ "boom_2.ogg": {
+  "src": "magic/50-cc0-retro-synth-sfx/retro_explosion_02.ogg",
+  "pack": "50 CC0 retro/synth SFX",
+  "license": "CC0",
+  "url": "https://opengameart.org/content/50-cc0-retro-synth-sfx"
+ },
+ "small_1.ogg": {
+  "src": "magic/50-cc0-retro-synth-sfx/retro_explosion_01.ogg",
+  "pack": "50 CC0 retro/synth SFX",
+  "license": "CC0",
+  "url": "https://opengameart.org/content/50-cc0-retro-synth-sfx"
+ },
+ "small_2.ogg": {
+  "src": "magic/50-cc0-retro-synth-sfx/retro_explosion_03.ogg",
+  "pack": "50 CC0 retro/synth SFX",
+  "license": "CC0",
+  "url": "https://opengameart.org/content/50-cc0-retro-synth-sfx"
+ },
+ "gun_1.ogg": {
+  "src": "impact/100-cc0-sfx/shot_01.ogg",
+  "pack": "100 CC0 SFX",
+  "license": "CC0",
+  "url": "https://opengameart.org/content/100-cc0-sfx"
+ },
+ "gun_2.ogg": {
+  "src": "impact/100-cc0-sfx/shot_02.ogg",
+  "pack": "100 CC0 SFX",
+  "license": "CC0",
+  "url": "https://opengameart.org/content/100-cc0-sfx"
+ },
+ "launch_1.ogg": {
+  "src": "magic/25-cc0-bang-firework-sfx/shot_01.ogg",
+  "pack": "25 CC0 bang/firework SFX",
+  "license": "CC0",
+  "url": "https://opengameart.org/content/25-cc0-bangfirework-sfx"
+ },
+ "launch_2.ogg": {
+  "src": "magic/25-cc0-bang-firework-sfx/shot_02.ogg",
+  "pack": "25 CC0 bang/firework SFX",
+  "license": "CC0",
+  "url": "https://opengameart.org/content/25-cc0-bangfirework-sfx"
+ },
+ "shock_1.ogg": {
+  "src": "magic/spell-sounds/electricspell.ogg",
+  "pack": "Spell sounds (Augmentality)",
+  "license": "CC0",
+  "url": ""
+ },
+ "crash_1.ogg": {
+  "src": "impact/impact-sounds/Audio/impactMetal_heavy_000.ogg",
+  "pack": "Kenney Impact Sounds",
+  "license": "CC0",
+  "url": "https://kenney.nl/assets/impact-sounds"
+ },
+ "crash_2.ogg": {
+  "src": "impact/impact-sounds/Audio/impactMetal_heavy_002.ogg",
+  "pack": "Kenney Impact Sounds",
+  "license": "CC0",
+  "url": "https://kenney.nl/assets/impact-sounds"
+ },
+ "crash_3.ogg": {
+  "src": "impact/impact-sounds/Audio/impactPlate_heavy_001.ogg",
+  "pack": "Kenney Impact Sounds",
+  "license": "CC0",
+  "url": "https://kenney.nl/assets/impact-sounds"
+ },
+ "hit_1.ogg": {
+  "src": "impact/impact-sounds/Audio/impactMetal_light_000.ogg",
+  "pack": "Kenney Impact Sounds",
+  "license": "CC0",
+  "url": "https://kenney.nl/assets/impact-sounds"
+ },
+ "hit_2.ogg": {
+  "src": "impact/impact-sounds/Audio/impactMetal_light_002.ogg",
+  "pack": "Kenney Impact Sounds",
+  "license": "CC0",
+  "url": "https://kenney.nl/assets/impact-sounds"
+ },
+ "hit_3.ogg": {
+  "src": "impact/impact-sounds/Audio/impactMetal_light_004.ogg",
+  "pack": "Kenney Impact Sounds",
+  "license": "CC0",
+  "url": "https://kenney.nl/assets/impact-sounds"
+ },
+ "wall_1.ogg": {
+  "src": "impact/impact-sounds/Audio/impactPlate_light_000.ogg",
+  "pack": "Kenney Impact Sounds",
+  "license": "CC0",
+  "url": "https://kenney.nl/assets/impact-sounds"
+ },
+ "wall_2.ogg": {
+  "src": "impact/impact-sounds/Audio/impactPlate_light_003.ogg",
+  "pack": "Kenney Impact Sounds",
+  "license": "CC0",
+  "url": "https://kenney.nl/assets/impact-sounds"
+ },
+ "rlaunch_2bdece.wav": {
+  "src": "magic/4-projectile-launches/launches/rlaunch.wav",
+  "pack": "4 projectile launches",
+  "license": "CC BY 3.0 (출처 표시)",
+  "url": "https://opengameart.org/content/4-projectile-launches"
+ },
+ "slimeball_b1366c.wav": {
+  "src": "magic/4-projectile-launches/launches/slimeball.wav",
+  "pack": "4 projectile launches",
+  "license": "CC BY 3.0 (출처 표시)",
+  "url": "https://opengameart.org/content/4-projectile-launches"
+ }
+}

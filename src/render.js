@@ -264,7 +264,26 @@
       return pts;
     }
 
+    function playSound(e) {
+      const isMine = (id) => id !== undefined && race.cars[id] && race.cars[id].team.id === race.data.playerTeam;
+      const S = root.HoverSound;
+      if (e.kind === 'shield') S.play('shield', isMine(e.car));
+      else if (e.kind === 'reboot') S.play('reboot', isMine(e.car));
+      else if (e.kind === 'crash') S.play('crash', isMine(e.a) || isMine(e.b));
+      else if (e.kind === 'wall') S.play('wall', isMine(e.car));
+      else if (e.kind === 'shot') S.play(e.weapon, isMine(e.shooter) || isMine(e.target));
+      else if (e.kind === 'miss') S.play('miss', isMine(e.target));
+      else if (e.kind === 'hit') {
+        const mine = isMine(e.shooter) || isMine(e.target);
+        if (e.shielded) S.play('shieldHit', mine);
+        else if (e.weapon === 'missile') S.play('boom', mine);
+        else if (e.weapon === 'rocket') S.play('smallBoom', mine);
+        else S.play('hit', mine);
+      }
+    }
+
     function handleEvent(e) {
+      playSound(e);
       const posOf = (id) => pointAt(race.cars[id].dist, laneOf(race.cars[id]));
       if (e.kind === 'shield') {
         const p = posOf(e.car);

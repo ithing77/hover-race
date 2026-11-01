@@ -6,9 +6,10 @@
   const usable = () => typeof root.Peer !== 'undefined';
 
   // 방장. handlers: ready(code), open(conn), data(conn, msg), close(conn), error(text)
-  function host(handlers, tries = 0) {
+  // code를 주면 그 방 코드를 다시 연다(이어 하기).
+  function host(handlers, tries = 0, wanted = null) {
     if (!usable()) return handlers.error('연결 도구를 못 불러왔어. 인터넷을 확인해 줘.');
-    const code = makeCode();
+    const code = wanted || makeCode();
     const peer = new root.Peer(PREFIX + code);
     peer.on('open', () => handlers.ready(code));
     peer.on('connection', (conn) => {
@@ -19,7 +20,8 @@
     });
     peer.on('disconnected', () => peer.reconnect());
     peer.on('error', (e) => {
-      if (e.type === 'unavailable-id' && tries < 5) host(handlers, tries + 1);
+      if (e.type === 'unavailable-id' && wanted) handlers.error('그 방 코드가 아직 쓰이고 있어. 잠시 뒤에 다시 해 줘.');
+      else if (e.type === 'unavailable-id' && tries < 5) host(handlers, tries + 1);
       else if (e.type !== 'peer-unavailable') handlers.error('연결에 문제가 생겼어: ' + e.type);
     });
     return peer;

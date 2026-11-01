@@ -26,8 +26,9 @@
   let qual = null; // 예선 진행 상태
   let recorded = false;
   let warned = {};
-  let audio = null;
+  let lapSeen = {};
 
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
   const fmt = (t) => {
     const s = Math.floor(t);
     return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
@@ -47,6 +48,13 @@
       if (!saved) return;
       season = saved.season;
       career = saved.career;
+      // 팀별 돈·연구로 바뀌기 전 저장을 옮긴다.
+      if (!career.orgs) {
+        career.orgs = {};
+        for (const t of DATA.teams) career.orgs[t.id] = { money: DATA.money.start, unlocked: [], active: [], researching: null };
+        career.orgs[DATA.playerTeam] = { money: career.money, unlocked: career.unlocked, active: career.active, researching: career.researching };
+        career.humans = [DATA.playerTeam];
+      }
       HoverCareer.apply(DATA, career);
       Object.assign(loadout, saved.loadout);
       setName(saved.name);
@@ -72,13 +80,13 @@
   const trackDef = (id) => DATA.tracks.find((t) => t.id === id);
   const raceSeed = () => (net ? net.match.seed : season ? season.seed + season.round * 101 : seed);
   const manualTeams = () => (net ? net.match.manual : [DATA.playerTeam]);
-  const skillsNow = () => (net ? {} : HoverCareer.skillsFor(career, currentTrack()));
+  const skillsNow = () => (net ? net.skills || {} : HoverCareer.skillsFor(career, currentTrack()));
   // 상대 팀은 시즌 조합에 그 팀 연구를 얹고, 내 차는 켜 둔 연구를 쓴다.
   function allLoadouts() {
     if (net) return net.match.loadouts;
     const out = {};
     if (season) for (const t of DATA.teams) out[t.id] = { ...season.loadouts[t.id], research: career.aiResearch[t.id] };
-    loadout.research = career.active;
+    loadout.research = career.orgs[DATA.playerTeam].active;
     out[DATA.playerTeam] = loadout;
     return out;
   }
@@ -86,6 +94,8 @@
   function setup() {
     recorded = false;
     warned = {};
+    lapSeen = {};
+    if (!inGarage) HoverSound.play('start', true);
     const laps = net ? net.match.laps : lapsParam > 0 ? lapsParam : null;
     race = HoverSim.createRace(DATA, raceSeed(), { manualTeams: manualTeams(), fx: true, trackId: currentTrack(), grid, laps, loadouts: allLoadouts(), skills: skillsNow() });
     if (net) netStageStarted('race');
@@ -93,7 +103,7 @@
     renderer.setSpeed(speed);
     debt = 0;
     $('result').hidden = true;
-    $('trackName').textContent = race.track.name + (net ? ` · 친구와 대전` : season ? ` · 시즌 ${season.round + 1}/${DATA.season.calendar.length}경기` : ' · 자유 경주');
+    $('trackName').textContent = race.track.name + (net ? ` · ${netLabel()}` : season ? ` · 시즌 ${season.round + 1}/${DATA.season.calendar.length}경기` : ' · 자유 경주');
     $('lapLabel').textContent = '바퀴';
     $('clockLabel').textContent = '경과 시간';
     $('chassis').hidden = false;
@@ -206,18 +216,25 @@
   }
 
   function beep() {
-    try {
-      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
-      [0, 0.18].forEach((at) => {
-        const osc = audio.createOscillator();
-        const gain = audio.createGain();
-        osc.frequency.value = 880;
-        gain.gain.value = 0.06;
-        osc.connect(gain).connect(audio.destination);
-        osc.start(audio.currentTime + at);
-        osc.stop(audio.currentTime + at + 0.1);
-      });
-    } catch (e) { /* 소리를 못 내도 카드가 깜빡인다 */ }
+    HoverSound.play('warn', true);
+  }
+
+  // 내 차 소리. 엔진은 더 빠른 쪽을 따르고, 바퀴를 돌면 알려 준다.
+  function updateSound() {
+    const mine = race ? myCars().filter((c) => c.finishTime === null) : [];
+    const quiet = inGarage || !race || race.over || !mine.length;
+    HoverSound.setEngine(quiet ? 0 : Math.max(0.02, ...mine.map((c) => (c.pitPhase === 'garage' ? 0.02 : c.speed / c.profile.top))));
+    if (quiet) return;
+    for (const car of mine) {
+      if (lapSeen[car.id] !== undefined && car.lapsDone > lapSeen[car.id]) HoverSound.play('lap', true);
+      lapSeen[car.id] = car.lapsDone;
+    }
+  }
+
+  function renderSoundBtn() {
+    const off = HoverSound.isMuted();
+    $('soundBtn').textContent = off ? '소리 꺼짐' : '소리 켜짐';
+    $('soundBtn').setAttribute('aria-pressed', String(!off));
   }
 
   function renderChassis() {
@@ -236,27 +253,48 @@
 
   function openOffice(tab) {
     officeTab = tab;
+    if (!myView()) return;
     $('office').hidden = false;
     renderOffice();
   }
 
-  function renderOffice() {
-    $('officeMoney').textContent = career.money + '억';
-    if (officeTab === 'research') renderResearch();
-    else renderDrivers();
+  // 혼자 할 때와 방장은 바로 계산하고, 손님은 방장이 보내 준 내용을 쓴다.
+  function myView() {
+    if (net) return net.view;
+    return HoverCareer.viewFor(DATA, career, DATA.playerTeam, canTransfer());
   }
 
-  function renderResearch() {
+  function officeAction(act, ...args) {
+    if (net && net.role === 'guest') {
+      netSend({ t: 'office', act, args });
+      return;
+    }
+    if (net) leagueOffice(DATA.playerTeam, act, args);
+    else {
+      HoverCareer[act](DATA, career, ...args);
+      saveSeason();
+    }
+    renderOffice();
+  }
+
+  function renderOffice() {
+    const view = myView();
+    if (!view) return;
+    $('officeMoney').textContent = view.money + '억';
+    if (officeTab === 'research') renderResearch(view);
+    else renderDrivers(view);
+  }
+
+  function renderResearch(view) {
     $('officeTitle').textContent = '연구소';
-    const now = career.researching;
-    const rows = Object.entries(DATA.research).map(([id, item]) => {
+    const rows = view.research.map((item) => {
       let action;
-      if (now && now.id === id) action = `<button type="button" disabled>${now.left}경기 남음</button>`;
-      else if (career.unlocked.includes(id)) {
+      if (item.left !== null) action = `<button type="button" disabled>${item.left}경기 남음</button>`;
+      else if (item.done) {
         action = item.settings ? '<button type="button" disabled>완료</button>'
-          : `<button type="button" data-toggle="${id}"${career.active.includes(id) ? ' class="on"' : ''}>${career.active.includes(id) ? '켜짐' : '꺼짐'}</button>`;
+          : `<button type="button" data-toggle="${item.id}"${item.on ? ' class="on"' : ''}>${item.on ? '켜짐' : '꺼짐'}</button>`;
       } else {
-        action = `<button type="button" data-research="${id}"${now || career.money < item.cost ? ' disabled' : ''}>연구 ${item.cost}억 · ${item.races}경기</button>`;
+        action = `<button type="button" data-research="${item.id}"${view.researching || view.money < item.cost ? ' disabled' : ''}>연구 ${item.cost}억 · ${item.races}경기</button>`;
       }
       return `<div class="o-row"><div class="o-main"><b>${item.name}</b><span class="o-sub">${item.desc}</span></div>${action}</div>`;
     }).join('');
@@ -267,26 +305,19 @@
     return !season || season.round === 0 || HoverSeason.inBreak(DATA, season);
   }
 
-  function renderDrivers() {
+  function renderDrivers(view) {
     $('officeTitle').textContent = '드라이버';
-    const mine = career.rosters[DATA.playerTeam];
-    const open = canTransfer();
-    const myRows = mine.map((name) => {
-      const d = career.drivers[name];
-      return `<div class="o-row"><div class="o-main"><b>${name} · ${d.age}세</b><span class="o-sub">${HoverCareer.myTraits(DATA, career, name).join(' · ')}</span></div></div>`;
-    }).join('');
-    const offer = (name, where) => {
-      const d = career.drivers[name];
-      const report = HoverCareer.scoutReport(DATA, career, name);
-      const cost = HoverCareer.fee(DATA, career, name);
-      const buttons = mine.map((m, slot) => `<button type="button" data-sign="${name}" data-slot="${slot}"${!open || career.money < cost ? ' disabled' : ''}>${m} 대신 ${cost}억</button>`).join('');
-      return `<div class="o-row"><div class="o-main"><b>${name} · ${d.age}세</b><span class="o-sub">${where} · 스카우트: ${report.text.join(' · ')} (${report.trust})</span></div>${buttons}</div>`;
+    const myRows = view.mine.map((d) =>
+      `<div class="o-row"><div class="o-main"><b>${esc(d.name)} · ${d.age}세</b><span class="o-sub">${d.traits.join(' · ')}${d.locked ? ' · 드래프트 보호 중' : ''}</span></div></div>`).join('');
+    const offer = (d) => {
+      const buttons = d.locked ? '<span class="o-sub">드래프트 보호 중</span>' : view.mine.map((m, slot) =>
+        `<button type="button" data-sign="${esc(d.name)}" data-slot="${slot}"${!view.open || view.money < d.fee ? ' disabled' : ''}>${esc(m.name)} 대신 ${d.fee}억</button>`).join('');
+      return `<div class="o-row"><div class="o-main"><b>${esc(d.name)} · ${d.age}세</b><span class="o-sub">${esc(d.where)} · 스카우트: ${d.text.join(' · ')} (${d.trust})</span></div>${buttons}</div>`;
     };
-    const rivals = DATA.teams.filter((t) => t.id !== DATA.playerTeam).flatMap((t) => career.rosters[t.id].map((n) => offer(n, t.name))).join('');
     $('officeBody').innerHTML = `<div class="o-head">내 드라이버</div>${myRows}
-      <p class="muted small">${open ? '지금 영입할 수 있어. 내보낸 선수는 상대 자리로 가.' : '영입은 시즌 전과 휴식기에만 할 수 있어.'}</p>
-      <div class="o-head">무소속</div>${career.market.map((n) => offer(n, '무소속')).join('')}
-      <div class="o-head">다른 팀 소속 (이적료 더 비쌈)</div>${rivals}`;
+      <p class="muted small">${view.open ? '지금 영입할 수 있어. 내보낸 선수는 상대 자리로 가.' : '영입은 시즌 전과 휴식기에만 할 수 있어.'}</p>
+      <div class="o-head">무소속</div>${view.market.map(offer).join('')}
+      <div class="o-head">다른 팀 소속 (이적료 더 비쌈)</div>${view.rivals.map(offer).join('')}`;
   }
 
   function partsChanged() {
@@ -319,17 +350,21 @@
   }
 
   function partsLocked() {
+    if (net) return Boolean(net.view) && net.view.league.round > 0 && !net.view.league.inBreak;
     return Boolean(season) && season.round > 0 && !HoverSeason.inBreak(DATA, season);
   }
 
   function renderGarage(fromSlider = false) {
     renderGarageSeason();
     const locked = partsLocked();
-    loadout.research = net ? [] : career.active;
+    const view = myView();
+    loadout.research = view ? view.active : [];
     if (net && net.role === 'guest') netSend({ t: 'load', loadout });
     const build = HoverSim.computeBuild(DATA, loadout);
-    $('garageMoney').textContent = career.money + '억';
-    $('garageYear').textContent = `${career.year}년차`;
+    if (view) {
+      $('garageMoney').textContent = view.money + '억';
+      $('garageYear').textContent = `${view.year}년차`;
+    }
     if (document.activeElement !== $('teamName')) $('teamName').value = player.name;
     $('garageWeapon').textContent = '무기: ' + build.weapon.name;
     const pct = (v) => Math.round(v * 100) + '%';
@@ -353,7 +388,7 @@
     if (!fromSlider) {
       $('garageSettings').innerHTML = `<div class="choice-label">세팅</div>` + Object.entries(DATA.settings).map(([key, s]) => {
         // 연구 전에는 ±1까지만 움직인다.
-        const range = HoverCareer.settingRange(DATA, net ? null : career, key);
+        const range = view ? view.range[key] : 2;
         loadout.setting[key] = Math.max(-range, Math.min(range, loadout.setting[key]));
         return `<label class="g-set"><span>${s.low}</span><input type="range" min="${-range}" max="${range}" step="1" value="${loadout.setting[key]}" data-setting="${key}" aria-label="${s.name}"><span>${s.high}</span></label>`;
       }).join('');
@@ -366,6 +401,10 @@
   function drawGarageCar() {
     const canvas = $('garageCar');
     const rect = canvas.getBoundingClientRect();
+    if (rect.width < 2 || rect.height < 2) { // 화면이 가려져 크기를 못 재면 나중에 다시 그린다
+      setTimeout(() => { if (!$('garage').hidden) drawGarageCar(); }, 100);
+      return;
+    }
     const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.max(1, Math.round(rect.width * dpr));
     canvas.height = Math.max(1, Math.round(rect.height * dpr));
@@ -382,7 +421,8 @@
     $('qual').hidden = true;
     $('office').hidden = true;
     $('garage').hidden = false;
-    breakBase = season && HoverSeason.inBreak(DATA, season) ? { ...loadout } : null;
+    const onBreak = net ? net.view && net.view.league.inBreak : season && HoverSeason.inBreak(DATA, season);
+    breakBase = onBreak ? { ...loadout } : null;
     renderGarage();
   }
 
@@ -415,7 +455,7 @@
     inGarage = false;
     qual.ended = false;
     $('qual').hidden = true;
-    $('trackName').textContent = net ? `${race.track.name} · 친구와 대전` : `${race.track.name} · 시즌 ${season.round + 1}/${DATA.season.calendar.length}경기`;
+    $('trackName').textContent = net ? `${race.track.name} · ${netLabel()}` : `${race.track.name} · 시즌 ${season.round + 1}/${DATA.season.calendar.length}경기`;
     $('lapLabel').textContent = '예선';
     $('clockLabel').textContent = '남은 시간';
     $('lapNow').textContent = qual.stage + 1;
@@ -523,7 +563,7 @@
   function renderSeasonResult(order) {
     const trackNow = currentTrack();
     const gained = HoverSeason.record(DATA, season, order);
-    const gain = HoverCareer.afterRace(DATA, career, order, trackNow);
+    const gain = HoverCareer.afterRace(DATA, career, order, trackNow)[DATA.playerTeam];
     recorded = true;
     const color = (id) => DATA.teams.find((t) => t.id === id).color;
     const done = HoverSeason.finished(DATA, season);
@@ -541,10 +581,11 @@
     if (gain.done) note += ` · 연구 완료: ${gain.done}`;
     if (done) {
       const end = HoverCareer.afterSeason(DATA, career, teams);
-      note = `컨스트럭터 ${end.place}위 · 시즌 보너스 ${end.bonus}억 · ${note}`;
+      const mine = end.standings[DATA.playerTeam];
+      note = `컨스트럭터 ${mine.place}위 · 시즌 보너스 ${mine.bonus}억 · ${note}`;
       for (const r of end.retired) note += ` · ${r.name}(${r.age}세) 은퇴, 신인 ${r.rookie} 합류`;
     }
-    $('resultNote').textContent = `${note} · 돈 ${career.money}억`;
+    $('resultNote').textContent = `${note} · 돈 ${career.orgs[DATA.playerTeam].money}억`;
     $('nextRace').textContent = done ? '다음 시즌 준비' : '다음 경기';
     $('restart2').hidden = true;
     $('toGarage2').hidden = true;
@@ -587,6 +628,15 @@
       if (el && best.length) el.textContent = Math.min(...best).toFixed(2) + '초';
     }
 
+    if (race.over && $('result').hidden && !recorded && !race.finishPlayed) {
+      race.finishPlayed = true;
+      HoverSound.play('finish', true);
+    }
+    if (race.over && net && net.league && !recorded) {
+      finishLeagueRace(order);
+      return;
+    }
+    if (race.over && net && net.view) return; // 손님은 방장이 보내는 결과를 기다린다
     if (race.over && $('result').hidden && season && !recorded) {
       renderSeasonResult(order);
       $('seasonTables').hidden = false;
@@ -619,6 +669,7 @@
       }
     }
     renderer.draw(dt);
+    updateSound();
     if (net) net.fxSent = 0; // 그리면서 연출 신호를 비웠다
     uiTimer += dt;
     if (uiTimer > 0.2) {
@@ -669,6 +720,7 @@
     DATA.teams.forEach((team, i) => {
       const member = room.members.find((m) => m.team === team.id);
       team.name = member ? member.name : teamDefaults[i].name;
+      if (room.rosters) team.drivers = room.rosters[team.id];
     });
     const me = room.members.find((m) => m.name === net.name);
     if (me) {
@@ -687,28 +739,51 @@
     const def = trackDef(room.track);
     $('quitSeason').hidden = false;
     $('quitSeason').textContent = '방 나가기';
-    $('startRace').textContent = host ? '경기 시작' : net.ready ? '준비 취소' : '준비';
+    const lg = net.view && net.view.league;
+    $('startRace').textContent = !host ? (net.ready ? '준비 취소' : '준비')
+      : !lg ? '시즌 시작' : lg.needDraft ? '다음 시즌 드래프트' : '예선으로';
+    $('startFree').hidden = !host || Boolean(lg);
+    $('startFree').textContent = '한 경기만 하기';
+    $('resetAll').hidden = !(host && lg);
+    $('resetAll').textContent = '시즌 기록 지우기';
+    $('officeBtns').hidden = !lg;
+    $('moneyLine').hidden = !lg;
     const others = room.members.filter((m) => !m.host);
     const members = room.members.map((m) => {
       const team = DATA.teams.find((t) => t.id === m.team);
       const state = !m.online ? '끊김' : m.host ? '방장' : m.ready ? '준비됨' : '고르는 중';
-      return `<div class="room-row"><span class="chip" style="background:${team.color}"></span>${m.name}<span class="tag${m.ready || m.host ? ' ok' : ''}">${state}</span></div>`;
+      return `<div class="room-row"><span class="chip" style="background:${team.color}"></span>${esc(m.name)}<span class="tag${m.ready || m.host ? ' ok' : ''}">${state}</span></div>`;
     }).join('');
-    const tracks = host
+    let leagueBox = '';
+    if (lg) {
+      const max = DATA.season.breakParts;
+      const note = lg.needDraft ? '시즌이 끝났어. 방장이 드래프트를 시작하면 추첨해.'
+        : lg.inBreak ? `휴식기: 부위를 최대 ${max}개 바꾸고 영입할 수 있어 (${breakBase ? partsChanged() : 0}/${max})`
+        : lg.round === 0 ? '첫 경기 뒤에는 부위를 휴식기까지 못 바꿔. 영입은 지금 할 수 있어.'
+        : lg.round > DATA.season.breakAfter ? '이번 시즌은 더 이상 부위를 못 바꿔. 세팅은 바꿀 수 있어.'
+        : '부위는 휴식기까지 잠겨 있어. 세팅은 바꿀 수 있어.';
+      const table = lg.teams.map((t, i) => {
+        const team = DATA.teams.find((x) => x.id === t.id);
+        return `<div class="room-row"><span>${i + 1}</span><span class="chip" style="background:${team.color}"></span>${esc(team.name)}<span class="tag">${t.pts}점</span></div>`;
+      }).join('');
+      leagueBox = `<div class="season-box"><b>${lg.year}년차 · ${lg.needDraft ? '시즌 끝' : `${lg.round + 1}/${lg.total}경기`}</b><p class="warn">${note}</p>${table}</div>`;
+    }
+    const tracks = host && !lg
       ? `<div class="g-tracks">${DATA.tracks.map((t) => `<button type="button" data-track="${t.id}"${t.id === room.track ? ' class="on"' : ''}>${t.name}</button>`).join('')}</div>`
       : `<b>${def.name}</b>`;
     box.innerHTML = `<div class="season-box"><div class="muted small">방 코드 · 친구에게 알려 줘</div><div class="room-code">${room.code}</div>${members}
       <p>빈 팀은 컴퓨터가 달려. ${host && others.some((m) => !m.ready) ? '아직 고르는 친구가 있어.' : ''}</p></div>
-      <div class="choice-label">트랙</div>${tracks}<p class="muted small">${def.desc}</p>`;
+      ${leagueBox}<div class="choice-label">${lg ? '다음 트랙' : '트랙'}</div>${tracks}<p class="muted small">${def.desc}</p>`;
   }
 
   function broadcastRoom() {
+    net.room.rosters = net.league ? net.league.career.rosters : null;
     netBroadcast({ t: 'room', room: net.room });
     assignPlayer(net.room);
   }
 
-  function hostRoom() {
-    const name = $('netName').value.trim();
+  function hostRoom(saved) {
+    const name = saved ? saved.name : $('netName').value.trim();
     if (!name) {
       $('netStatus').textContent = '이름을 적어 줘.';
       return;
@@ -719,8 +794,20 @@
       ready(code) {
         enterNet('host', name);
         net.room = { code, track: DATA.tracks[0].id, members: [{ name, team: DATA.teams[0].id, host: true, ready: true, online: true }] };
+        if (saved) {
+          net.league = saved.league;
+          HoverCareer.apply(DATA, net.league.career);
+          Object.assign(loadout, saved.loadout);
+          net.room.track = saved.track;
+          net.room.members = saved.members.map((m) => ({ ...m, ready: Boolean(m.host), online: Boolean(m.host) }));
+        }
         assignPlayer(net.room);
         setInterval(hostTick, 25);
+        if (saved) {
+          pushViews();
+          broadcastRoom();
+          if (net.league.draft) sendDraft();
+        }
         openGarage();
       },
       open() {},
@@ -732,7 +819,7 @@
         if (net && net.role === 'connecting') net = null;
         $('netStatus').textContent = text;
       },
-    });
+    }, 0, saved ? saved.code : null);
   }
 
   function memberLeft(name, conn) {
@@ -745,8 +832,8 @@
     // 끊긴 팀은 컴퓨터가 대신 달린다.
     if (race) for (const car of race.cars) if (car.team.id === member.team) car.manual = false;
     if (net.match) net.match.manual = net.match.manual.filter((id) => id !== member.team);
-    // 경기 전이면 자리를 비운다.
-    if (!net.match) net.room.members = net.room.members.filter((m) => m !== member);
+    // 시즌이 아니고 경기 전이면 자리를 비운다.
+    if (!net.match && !net.league) net.room.members = net.room.members.filter((m) => m !== member);
     broadcastRoom();
   }
 
@@ -769,6 +856,7 @@
       member.online = true;
       conn.memberName = msg.name;
       net.conns[msg.name] = conn;
+      if (net.league && !net.league.career.humans.includes(member.team)) net.league.career.humans.push(member.team);
       // 다시 들어온 사람이면 다시 맡긴다.
       if (net.match && net.match.started && race && race.cars.some((c) => c.team.id === member.team)) {
         for (const car of race.cars) if (car.team.id === member.team) car.manual = true;
@@ -782,6 +870,11 @@
         conn.send(slowState());
       }
       if (net.lastEnd) conn.send(net.lastEnd);
+      if (net.league) {
+        pushViews();
+        if (net.league.draft) sendDraft();
+        if (net.lastResult) conn.send({ ...net.lastResult, note: net.lastResult.notes[member.team] || '' });
+      }
       return;
     }
     const member = net.room.members.find((m) => m.name === conn.memberName);
@@ -791,6 +884,8 @@
       member.ready = Boolean(msg.ready);
       broadcastRoom();
     }
+    if (msg.t === 'office' && net.league) leagueOffice(member.team, msg.act, msg.args || []);
+    if (msg.t === 'pick' && net.league) leagueDraftPick(member.team, msg.name, msg.slot);
     if (msg.t === 'cmd' && COMMANDS.includes(msg.fn) && race && net.match) {
       const car = race.cars[msg.carId];
       if (car && car.team.id === member.team) HoverSim[msg.fn](race, msg.carId, ...(msg.args || []));
@@ -820,12 +915,281 @@
       else if (member && member.online) loadouts[team.id] = member.loadout || cleanLoadout(null, team.id);
       else loadouts[team.id] = HoverSim.aiLoadout(DATA, team, rng, true);
     }
-    net.match = { seed: matchSeed, track: net.room.track, laps: lapsParam > 0 ? lapsParam : null, loadouts, manual: members.filter((m) => m.online).map((m) => m.team), started: true };
+    launchMatch({ seed: matchSeed, track: net.room.track, laps: lapsParam > 0 ? lapsParam : null, loadouts, manual: members.filter((m) => m.online).map((m) => m.team), started: true });
+  }
+
+  function launchMatch(match) {
+    net.match = match;
     net.lastEnd = null;
+    net.lastResult = null;
     grid = null;
     $('garage').hidden = true;
+    $('office').hidden = true;
     qual = { rows: HoverSim.qualRows(DATA), stage: 0 };
     startStage();
+  }
+
+  // ---------- 시즌 멀티 (방장 계산) ----------
+  const LEAGUE_KEY = 'hoverrace-league';
+
+  function netLabel() {
+    const lg = net.view && net.view.league;
+    return lg ? `${lg.year}년차 ${lg.round + 1}/${lg.total}경기` : '친구와 대전';
+  }
+
+  function readLeagueSave() {
+    try {
+      return JSON.parse(localStorage.getItem(LEAGUE_KEY));
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // 시즌은 길어서 방장 브라우저에 자주 저장한다.
+  function saveLeague() {
+    if (!net.league) return;
+    try {
+      localStorage.setItem(LEAGUE_KEY, JSON.stringify({ code: net.room.code, name: net.name, track: net.room.track, loadout, league: net.league, members: net.room.members.map((m) => ({ name: m.name, team: m.team, host: m.host, loadout: m.loadout })) }));
+    } catch (e) { /* 저장을 못 해도 경기는 계속된다 */ }
+  }
+
+  function viewFor(team) {
+    const lg = net.league;
+    const s = lg.season;
+    const breakNow = Boolean(s) && HoverSeason.inBreak(DATA, s);
+    const view = HoverCareer.viewFor(DATA, lg.career, team, !s || s.round === 0 || breakNow);
+    view.league = {
+      year: lg.career.year,
+      round: s ? s.round : 0,
+      total: DATA.season.calendar.length,
+      inBreak: breakNow,
+      needDraft: lg.needDraft,
+      teams: s ? HoverSeason.teamTable(s).map((t) => ({ id: t.id, pts: t.pts })) : [],
+    };
+    return view;
+  }
+
+  function pushViews() {
+    if (!net.league) return;
+    for (const member of net.room.members) {
+      if (member.host) continue;
+      const conn = net.conns[member.name];
+      if (conn && conn.open) conn.send({ t: 'view', view: viewFor(member.team) });
+    }
+    applyView(viewFor(DATA.playerTeam));
+  }
+
+  function applyView(view) {
+    net.view = view;
+    // 휴식기가 시작되면 지금 조합을 기준으로 몇 개 바꿨는지 잰다.
+    if (!view.league.inBreak) breakBase = null;
+    else if (!breakBase) breakBase = { ...loadout };
+    if (!$('office').hidden) renderOffice();
+    if (!$('garage').hidden) renderGarage();
+  }
+
+  function leagueOffice(team, act, args) {
+    if (!['startResearch', 'toggleResearch', 'sign'].includes(act)) return;
+    if (act === 'sign') {
+      const s = net.league.season;
+      if (s && s.round !== 0 && !HoverSeason.inBreak(DATA, s)) return;
+      HoverCareer.sign(DATA, net.league.career, args[0], Number(args[1]), team);
+      broadcastRoom();
+    } else {
+      HoverCareer[act](DATA, net.league.career, args[0], team);
+    }
+    pushViews();
+    saveLeague();
+  }
+
+  function startLeague() {
+    const c = HoverCareer.create(DATA, Math.floor(Math.random() * 1e6));
+    c.humans = net.room.members.map((m) => m.team);
+    net.league = { career: c, season: null, needDraft: false, lastTable: null, draft: null };
+    beginDraft(null);
+  }
+
+  function beginDraft(table) {
+    const lg = net.league;
+    lg.needDraft = false;
+    lg.draft = HoverCareer.startDraft(DATA, lg.career, table);
+    armDraft();
+    broadcastRoom();
+    sendDraft();
+    pushViews();
+    saveLeague();
+  }
+
+  // 지금 뽑을 팀의 제한 시간을 정한다. 사람이 없으면 컴퓨터가 금방 고른다.
+  function armDraft() {
+    const team = HoverCareer.currentPicker(net.league.draft);
+    const member = net.room.members.find((m) => m.team === team && m.online);
+    net.draftAt = performance.now() + (member ? DATA.draft.pickSeconds : DATA.draft.aiSeconds) * 1000;
+  }
+
+  function sendDraft() {
+    const lg = net.league;
+    if (!net.draftAt) armDraft();
+    const left = Math.max(0, (net.draftAt - performance.now()) / 1000);
+    for (const member of net.room.members) {
+      if (member.host) continue;
+      const conn = net.conns[member.name];
+      if (conn && conn.open) conn.send({ t: 'draft', view: HoverCareer.draftView(DATA, lg.career, lg.draft, member.team), left });
+    }
+    renderDraft(HoverCareer.draftView(DATA, lg.career, lg.draft, DATA.playerTeam), left);
+  }
+
+  function leagueDraftPick(team, name, slot) {
+    const lg = net.league;
+    if (!lg.draft || !HoverCareer.draftPick(DATA, lg.career, lg.draft, team, name, slot)) return;
+    afterDraftPick();
+  }
+
+  function afterDraftPick() {
+    const lg = net.league;
+    if (!HoverCareer.currentPicker(lg.draft)) {
+      lg.draft = null;
+      net.draftAt = 0;
+      const s = HoverSeason.create(DATA, Math.floor(Math.random() * 1e6) * 1000);
+      lg.season = s;
+      net.room.track = DATA.season.calendar[0];
+      broadcastRoom();
+      netBroadcast({ t: 'draftEnd' });
+      $('draft').hidden = true;
+      pushViews();
+      saveLeague();
+      openGarage();
+      return;
+    }
+    armDraft();
+    sendDraft();
+    saveLeague();
+  }
+
+  function draftTick() {
+    const lg = net.league;
+    if (!lg || !lg.draft || performance.now() < net.draftAt) return;
+    const team = HoverCareer.currentPicker(lg.draft);
+    if (team && HoverCareer.draftAuto(DATA, lg.career, lg.draft, team)) afterDraftPick();
+  }
+
+  // 대기실에서 다음 단계로. 드래프트이거나 다음 경기.
+  function leagueNext() {
+    const lg = net.league;
+    if (lg.needDraft) {
+      beginDraft(lg.lastTable);
+      return;
+    }
+    if (!lg.season) return;
+    if (HoverSeason.inBreak(DATA, lg.season)) HoverSeason.endBreak(DATA, lg.season);
+    const track = DATA.season.calendar[lg.season.round];
+    const loadouts = {};
+    for (const team of DATA.teams) {
+      const member = net.room.members.find((m) => m.team === team.id);
+      if (member && lg.career.humans.includes(team.id)) {
+        const lo = member.host ? cleanLoadout(loadout, team.id) : member.loadout || cleanLoadout(null, team.id);
+        loadouts[team.id] = { ...lo, research: lg.career.orgs[team.id].active };
+      } else {
+        loadouts[team.id] = { ...lg.season.loadouts[team.id], research: lg.career.aiResearch[team.id] };
+      }
+    }
+    net.skills = HoverCareer.skillsFor(lg.career, track);
+    saveLeague();
+    launchMatch({ seed: lg.season.seed + lg.season.round * 101, track, laps: lapsParam > 0 ? lapsParam : null, loadouts, manual: net.room.members.filter((m) => m.online).map((m) => m.team), started: true });
+  }
+
+  function finishLeagueRace(order) {
+    recorded = true;
+    const lg = net.league;
+    const s = lg.season;
+    const trackNow = net.match.track;
+    const gained = HoverSeason.record(DATA, s, order);
+    const earned = HoverCareer.afterRace(DATA, lg.career, order, trackNow);
+    const done = HoverSeason.finished(DATA, s);
+    const drivers = HoverSeason.driverTable(s);
+    const teams = HoverSeason.teamTable(s);
+    const notes = {};
+    for (const id of lg.career.humans) {
+      const e = earned[id] || { earned: 0, done: null };
+      notes[id] = `상금 ${e.earned}억${e.done ? ` · 연구 완료: ${e.done}` : ''}`;
+    }
+    let retireNote = '';
+    if (done) {
+      const end = HoverCareer.afterSeason(DATA, lg.career, teams);
+      for (const id of lg.career.humans) notes[id] = `컨스트럭터 ${end.standings[id].place}위 · 시즌 보너스 ${end.standings[id].bonus}억 · ${notes[id]}`;
+      for (const r of end.retired) retireNote += ` · ${r.name}(${r.age}세) 은퇴`;
+      lg.lastTable = teams.map((t) => ({ id: t.id }));
+      lg.season = null;
+      lg.needDraft = true;
+    }
+    for (const id of lg.career.humans) notes[id] += ` · 돈 ${lg.career.orgs[id].money}억${retireNote}`;
+    const champ = done ? `시즌 종료 · 챔피언 ${drivers[0].driver} · 컨스트럭터 ${DATA.teams.find((t) => t.id === teams[0].id).name}` : `${s.round}/${DATA.season.calendar.length}경기 결과 · ${race.track.name}`;
+    net.lastResult = {
+      t: 'result',
+      title: champ,
+      notes,
+      done,
+      rows: order.map((car, i) => ({ driver: car.driver, team: car.team.id, pts: gained[i].pts })),
+      drivers: drivers.map((d) => ({ driver: d.driver, team: d.team, pts: d.pts })),
+      teams: teams.map((t) => ({ id: t.id, pts: t.pts })),
+    };
+    for (const member of net.room.members) {
+      const conn = net.conns[member.name];
+      if (!member.host && conn && conn.open) conn.send({ ...net.lastResult, note: notes[member.team] || '' });
+    }
+    showLeagueResult({ ...net.lastResult, note: notes[DATA.playerTeam] || '' });
+    saveLeague();
+  }
+
+  function showLeagueResult(msg) {
+    recorded = true;
+    const team = (id) => DATA.teams.find((t) => t.id === id);
+    $('resultTitle').textContent = msg.title;
+    $('resultNote').textContent = msg.note + (net.role === 'guest' ? ' · 방장이 넘기면 이어져.' : '');
+    $('resultRows').innerHTML = msg.rows.map((r, i) =>
+      `<div class="row${r.team === DATA.playerTeam ? ' mine' : ''}"><span class="pos">${i + 1}</span><span class="chip" style="background:${team(r.team).color}"></span><span class="name">${esc(r.driver)} · ${esc(team(r.team).name)}</span><span class="pts">+${r.pts}</span></div>`).join('');
+    $('seasonTables').hidden = false;
+    $('seasonTables').innerHTML = `<div class="muted small title">드라이버 챔피언십</div>${tableRows(msg.drivers, (r) => esc(r.driver), (r) => team(r.team).color)}
+      <div class="muted small title">컨스트럭터 챔피언십</div>${tableRows(msg.teams, (r) => esc(team(r.id).name), (r) => team(r.id).color)}`;
+    $('nextRace').hidden = net.role !== 'host';
+    $('nextRace').textContent = msg.done ? '대기실로 · 다음 시즌 준비' : '대기실로';
+    $('restart2').hidden = true;
+    $('toGarage2').hidden = true;
+    $('result').hidden = false;
+  }
+
+  // 드래프트 화면. 내 차례면 뽑는 버튼이 나온다.
+  let draftTimer = null;
+
+  function renderDraft(view, left) {
+    const team = (id) => DATA.teams.find((t) => t.id === id);
+    const mine = view.current === DATA.playerTeam;
+    const until = performance.now() + left * 1000;
+    const note = () => {
+      const secs = Math.max(0, Math.ceil((until - performance.now()) / 1000));
+      $('draftNote').textContent = (mine ? `네 차례야! 남은 시간 ${secs}초. 시간이 지나면 자동으로 골라.`
+        : `${team(view.current) ? team(view.current).name : ''} 차례 · ${secs}초`)
+        + (view.first ? ' 첫 시즌은 무작위 순서로, 팀마다 한 명씩 뽑아.' : ' 지난 시즌 하위 팀일수록 앞 순서가 될 확률이 높아. 안 뽑고 넘겨도 돼.');
+    };
+    clearInterval(draftTimer);
+    draftTimer = setInterval(note, 500);
+    note();
+    $('draftTitle').textContent = `${view.year}년차 드래프트`;
+    $('draftOrder').innerHTML = view.order.map((o, i) => {
+      const pick = view.picks[i];
+      const label = pick ? (pick.name ? esc(pick.name) : '넘김') : (o.chance !== null ? `1순위 확률 ${o.chance}%` : '');
+      return `<span class="${i === view.idx ? 'now' : i < view.idx ? 'done' : ''}">${i + 1}. ${esc(team(o.id).name)}${label ? ' · ' + label : ''}</span>`;
+    }).join('');
+    const buttons = (name) => {
+      if (!mine) return '';
+      if (view.first) return `<button type="button" data-pick="${esc(name)}">뽑기</button>`;
+      return view.mine.map((m, slot) => `<button type="button" data-pick="${esc(name)}" data-slot="${slot}">${esc(m)} 대신</button>`).join('');
+    };
+    $('draftPool').innerHTML = view.pool.map((d) =>
+      `<div class="o-row"><div class="o-main"><b>${esc(d.name)} · ${d.age}세</b><span class="o-sub">스카우트: ${d.text.join(' · ')} (${d.trust})</span></div>${buttons(d.name)}</div>`).join('')
+      + (mine && !view.first ? '<button type="button" class="again big" data-pass="1">이번엔 안 뽑기</button>' : '');
+    $('garage').hidden = true;
+    $('draft').hidden = false;
   }
 
   const packRows = (rows) => rows.map((r) => ({ driver: r.driver, team: r.team.id, times: r.times, time: r.time }));
@@ -848,11 +1212,20 @@
     net.match = null;
     net.lastStage = null;
     net.lastEnd = null;
+    net.lastResult = null;
+    qual = null;
+    net.skills = null;
     for (const m of net.room.members) if (!m.host) m.ready = false;
-    net.room.members = net.room.members.filter((m) => m.online);
+    if (net.league) {
+      if (net.league.season) net.room.track = DATA.season.calendar[net.league.season.round];
+    } else {
+      net.room.members = net.room.members.filter((m) => m.online);
+    }
     netBroadcast({ t: 'back' });
     broadcastRoom();
     openGarage();
+    pushViews();
+    saveLeague();
   }
 
   // 위치처럼 자주 바뀌는 값은 자주, 지시 상태처럼 드문 값은 가끔 보낸다.
@@ -871,6 +1244,7 @@
 
   // 방장의 계산과 전송. 탭이 내려가 화면이 멈춰도 돌도록 타이머로 돈다.
   function hostTick() {
+    draftTick();
     const now = performance.now();
     if (!race || inGarage || race.over && net.overSent === race) return;
     const dt = Math.min(2, (now - net.stepAt) / 1000);
@@ -940,7 +1314,7 @@
       location.reload();
     } else if (msg.t === 'room') {
       assignPlayer(msg.room);
-      if (!qual && !net.match) openGarage();
+      if (!qual && !net.match && $('garage').hidden && $('draft').hidden) openGarage();
     } else if (msg.t === 'stage') {
       guestStage(msg);
     } else if (msg.t === 'qualEnd') {
@@ -952,6 +1326,16 @@
       net.match = null;
       qual = null;
       openGarage();
+    } else if (msg.t === 'view') {
+      applyView(msg.view);
+    } else if (msg.t === 'draft') {
+      renderDraft(msg.view, msg.left);
+    } else if (msg.t === 'draftEnd') {
+      clearInterval(draftTimer);
+      $('draft').hidden = true;
+      openGarage();
+    } else if (msg.t === 'result') {
+      showLeagueResult(msg);
     } else if (msg.t === 'f') {
       guestFast(msg);
     } else if (msg.t === 's') {
@@ -1032,12 +1416,17 @@
     setup();
   }
 
+  $('soundBtn').addEventListener('click', () => {
+    HoverSound.setMuted(!HoverSound.isMuted());
+    renderSoundBtn();
+  });
   $('speeds').addEventListener('click', (e) => {
     if (e.target.dataset.speed) setSpeed(Number(e.target.dataset.speed));
   });
   $('radio').addEventListener('click', (e) => {
     const b = e.target.closest('button');
     if (!b) return;
+    HoverSound.play(b.dataset.release ? 'release' : 'blip', true);
     if (b.dataset.release) command('releaseCar', Number(b.dataset.release));
     if (b.dataset.qmode) command('setQualMode', Number(b.dataset.car), b.dataset.qmode);
     if (race.qual) {
@@ -1061,8 +1450,9 @@
   $('toGarage2').addEventListener('click', openGarage);
   $('startRace').addEventListener('click', () => {
     if (net) {
-      if (net.role === 'host') startMatch();
-      else toggleReady();
+      if (net.role !== 'host') toggleReady();
+      else if (net.league) leagueNext();
+      else startLeague();
       return;
     }
     if (!season) {
@@ -1078,6 +1468,10 @@
     openQualifying();
   });
   $('startFree').addEventListener('click', () => {
+    if (net) {
+      startMatch();
+      return;
+    }
     inGarage = false;
     grid = null;
     $('garage').hidden = true;
@@ -1095,6 +1489,12 @@
     openGarage();
   });
   $('resetAll').addEventListener('click', () => {
+    if (net) {
+      if (!confirm('이 방의 시즌 기록을 전부 지울까? 친구들 기록도 함께 사라져.')) return;
+      localStorage.removeItem(LEAGUE_KEY);
+      location.reload();
+      return;
+    }
     if (!confirm('돈, 연구, 드라이버까지 전부 지우고 처음부터 할까?')) return;
     season = null;
     career = HoverCareer.create(DATA, Date.now() % 100000);
@@ -1114,11 +1514,9 @@
   $('officeBody').addEventListener('click', (e) => {
     const b = e.target.closest('button');
     if (!b || b.disabled) return;
-    if (b.dataset.research) HoverCareer.startResearch(DATA, career, b.dataset.research);
-    if (b.dataset.toggle) HoverCareer.toggleResearch(DATA, career, b.dataset.toggle);
-    if (b.dataset.sign) HoverCareer.sign(DATA, career, b.dataset.sign, Number(b.dataset.slot));
-    saveSeason();
-    renderOffice();
+    if (b.dataset.research) officeAction('startResearch', b.dataset.research);
+    if (b.dataset.toggle) officeAction('toggleResearch', b.dataset.toggle);
+    if (b.dataset.sign) officeAction('sign', b.dataset.sign, Number(b.dataset.slot));
   });
   $('garageSeason').addEventListener('click', (e) => {
     if (!e.target.dataset.track) return;
@@ -1133,16 +1531,32 @@
   $('openLobby').addEventListener('click', () => {
     $('netName').value = player.name === '내 팀' ? '' : player.name;
     $('netStatus').textContent = '';
+    const saved = readLeagueSave();
+    $('netResume').hidden = !saved;
+    if (saved) {
+      $('netResume').textContent = `지난 시즌 이어 하기 · ${saved.code} · ${saved.league.career.year}년차`;
+      $('netName').value = saved.name;
+    }
     $('lobby').hidden = false;
   });
   $('closeLobby').addEventListener('click', () => {
     $('lobby').hidden = true;
   });
-  $('netHost').addEventListener('click', hostRoom);
+  $('netHost').addEventListener('click', () => hostRoom(null));
+  $('netResume').addEventListener('click', () => hostRoom(readLeagueSave()));
+  $('draftPool').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    const name = b.dataset.pick || null;
+    const slot = b.dataset.slot === undefined ? undefined : Number(b.dataset.slot);
+    if (net.role === 'guest') netSend({ t: 'pick', name, slot });
+    else leagueDraftPick(DATA.playerTeam, name, slot);
+  });
   $('netJoin').addEventListener('click', joinRoom);
   $('netLeave').addEventListener('click', () => location.reload());
   $('qualGo').addEventListener('click', () => {
     if (qual.stage < qualStageCount() - 1) {
+      HoverSound.play('blip', true);
       qual.stage++;
       startStage();
       return;
@@ -1156,6 +1570,7 @@
   $('nextRace').addEventListener('click', () => {
     if (net) backToRoom();
     else openGarage();
+    $('seasonTables').hidden = false;
   });
   $('garageParts').addEventListener('click', (e) => {
     const b = e.target.closest('button');
@@ -1177,6 +1592,7 @@
   addEventListener('resize', () => renderer.resize());
 
   setSpeed(1);
+  renderSoundBtn();
   HoverCareer.apply(DATA, career);
   $('brandName').textContent = player.name;
   loadSeason();

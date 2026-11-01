@@ -22,6 +22,7 @@
       <button type="button" data-speed="2">2배속</button>
       <button type="button" data-speed="4">4배속</button>
     </div>
+    <button type="button" class="again" id="soundBtn"></button>
     <button type="button" class="again" id="restart">다시 달리기</button>
     <button type="button" class="again" id="toGarage">차고</button>
   </header>
@@ -66,6 +67,7 @@
         <button type="button" class="again big" id="openLobby">친구와 하기</button>
         <button type="button" class="again big" id="quitSeason">시즌 그만두기</button>
         <button type="button" class="again big" id="resetAll">처음부터 다시</button>
+        <p class="muted small"><a href="assets/sfx/CREDITS.txt" target="_blank" rel="noopener" style="color:inherit">효과음 출처 보기</a></p>
       </div>
     </div>
   </div>
@@ -75,6 +77,7 @@
       <label class="choice-label" for="netName">내 이름 (팀 이름으로 쓰여)</label>
       <input id="netName" class="team-name" maxlength="14">
       <button type="button" class="again big go" id="netHost">방 만들기</button>
+      <button type="button" class="again big" id="netResume" hidden>지난 시즌 이어 하기</button>
       <label class="choice-label qual-label" for="netCode">방 코드</label>
       <input id="netCode" class="team-name" maxlength="4" autocomplete="off">
       <button type="button" class="again big" id="netJoin">들어가기</button>
@@ -85,6 +88,14 @@
   <div class="net-banner" id="netBanner" role="status" hidden>
     <span id="netBannerText"></span>
     <button type="button" class="again" id="netLeave">방 나가기</button>
+  </div>
+  <div class="result" id="draft" hidden>
+    <div class="result-box wide">
+      <h2 id="draftTitle">드래프트</h2>
+      <div class="muted small" id="draftNote"></div>
+      <div class="draft-order" id="draftOrder"></div>
+      <div id="draftPool"></div>
+    </div>
   </div>
   <div class="result" id="office" hidden>
     <div class="result-box wide">
@@ -117,6 +128,7 @@
   </div>
 </div>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="src/sound.js"></script>
 <script src="src/data.js"></script>
 <script src="src/sim.js"></script>
 <script src="src/season.js"></script>

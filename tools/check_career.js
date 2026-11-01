@@ -52,13 +52,13 @@ for (let y = 1; y <= 3; y++) {
   while (!Season.finished(DATA, season)) {
     if (Season.inBreak(DATA, season)) {
       Season.endBreak(DATA, season);
-      if (Career.sign(DATA, career, career.market[0], 1)) console.log('휴식기 영입, 남은 돈', career.money);
+      if (Career.sign(DATA, career, career.market[0], 1)) console.log('휴식기 영입, 남은 돈', career.orgs.mine.money);
     }
     const trackId = DATA.season.calendar[season.round];
     const seed = season.seed + season.round * 101;
     const skills = Career.skillsFor(career, trackId);
     const lo = {};
-    for (const t of DATA.teams) lo[t.id] = { ...season.loadouts[t.id], research: t.id === DATA.playerTeam ? career.active : career.aiResearch[t.id] };
+    for (const t of DATA.teams) lo[t.id] = { ...season.loadouts[t.id], research: t.id === DATA.playerTeam ? career.orgs.mine.active : career.aiResearch[t.id] };
     const grid = Sim.qualify(DATA, trackId, seed, lo, {}, skills).map((r) => r.driver);
     const race = Sim.createRace(DATA, seed, { trackId, grid, loadouts: lo, skills, laps: 3 });
     while (!race.over) Sim.stepRace(race);
@@ -69,8 +69,31 @@ for (let y = 1; y <= 3; y++) {
   const total = DATA.season.points.reduce((a, b) => a + b, 0) * DATA.season.calendar.length;
   if (Season.teamTable(season).reduce((a, t) => a + t.pts, 0) !== total) throw new Error('팀 점수 합이 맞지 않음');
   const end = Career.afterSeason(DATA, career, Season.teamTable(season));
-  console.log(`시즌 ${y}: ${end.place}위 보너스 ${end.bonus} · 돈 ${career.money} · 은퇴 ${end.retired.map((r) => r.name).join(', ') || '없음'} · 내 선수 ${career.rosters[DATA.playerTeam].map((n) => `${n}(${career.drivers[n].age}세 ${Career.myTraits(DATA, career, n).join('/')})`).join(' ')}`);
+  console.log(`시즌 ${y}: ${end.standings.mine.place}위 보너스 ${end.standings.mine.bonus} · 돈 ${career.orgs.mine.money} · 은퇴 ${end.retired.map((r) => r.name).join(', ') || '없음'} · 내 선수 ${career.rosters[DATA.playerTeam].map((n) => `${n}(${career.drivers[n].age}세 ${Career.myTraits(DATA, career, n).join('/')})`).join(' ')}`);
 }
 const rival = career.rosters[DATA.teams[1].id][0];
 console.log('스카우트 예', rival, Career.scoutReport(DATA, career, rival), '이적료', Career.fee(DATA, career, rival));
+// 드래프트: 첫 시즌과 추첨.
+const d2 = Career.create(DATA, 7);
+d2.humans = ['mine', 'aurora'];
+const first = Career.startDraft(DATA, d2, null);
+if (d2.rosters.mine.length !== 1) throw new Error('첫 드래프트 전 자리가 이상함');
+while (Career.currentPicker(first)) if (!Career.draftAuto(DATA, d2, first, Career.currentPicker(first))) throw new Error('자동 선택 실패');
+if (DATA.teams.some((t) => d2.rosters[t.id].length !== 2)) throw new Error('첫 드래프트 뒤 인원이 이상함');
+const picked = first.picks[0].name;
+if (Career.sign(DATA, d2, picked, 0, first.picks[0].team === 'wolf' ? 'mine' : 'wolf')) throw new Error('보호된 선수를 영입함');
+const table = DATA.teams.map((t) => ({ id: t.id }));
+const counts = {};
+for (let i = 0; i < 2000; i++) {
+  const test = Career.create(DATA, i);
+  const draft = Career.startDraft(DATA, test, table);
+  counts[draft.order[0].id] = (counts[draft.order[0].id] || 0) + 1;
+}
+console.log('1순위 횟수(2000번, 왼쪽이 지난 시즌 상위)', DATA.teams.map((t) => `${t.id} ${counts[t.id] || 0}`).join(' '));
+const draft2 = Career.startDraft(DATA, d2, table);
+if (draft2.pool.length !== DATA.draft.rookies) throw new Error('신인 수가 이상함');
+while (Career.currentPicker(draft2)) Career.draftAuto(DATA, d2, draft2, Career.currentPicker(draft2));
+if (DATA.teams.some((t) => d2.rosters[t.id].length !== 2)) throw new Error('두 번째 드래프트 뒤 인원이 이상함');
+const view = Career.viewFor(DATA, d2, 'mine', true);
+if (JSON.stringify(view).includes('"pace"')) throw new Error('능력 숫자가 화면 자료에 들어감');
 console.log('경력 확인 통과');

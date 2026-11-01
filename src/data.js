@@ -255,6 +255,9 @@
     },
     settingResearch: { balance: 'setBalance', gearing: 'setGearing', power: 'setPower' },
 
+    // 멀티 시즌 드래프트. odds는 지난 시즌 컨스트럭터 1위부터의 추첨 비중(꼴찌일수록 큼).
+    draft: { odds: [5, 10, 18, 27, 40], rookies: 8, pickSeconds: 20, aiSeconds: 1.2, lockSeasons: 2 },
+
     // 드라이버. 능력 숫자는 계산에만 쓰고 화면엔 말로 보여 준다. 기체 성격을 뒤집지 않을 만큼만.
     drivers: {
       paceStat: 0.001, // 빠르기 1점당 속도

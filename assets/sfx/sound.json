@@ -1,0 +1,113 @@
+{
+ "gun": {
+  "files": [
+   "gun_1.ogg",
+   "gun_2.ogg"
+  ],
+  "gain": 0.45
+ },
+ "rocket": {
+  "files": [
+   "rlaunch_2bdece.wav"
+  ],
+  "gain": 0.6,
+  "layer": false
+ },
+ "missile": {
+  "files": [
+   "launch_1.ogg",
+   "launch_2.ogg"
+  ],
+  "gain": 0.8,
+  "rate": 0.75,
+  "layer": true
+ },
+ "shock": {
+  "files": [
+   "shock_1.ogg"
+  ],
+  "gain": 0.5,
+  "max": 0.45
+ },
+ "hit": {
+  "files": [
+   "hit_1.ogg",
+   "hit_2.ogg",
+   "hit_3.ogg"
+  ],
+  "gain": 0.7
+ },
+ "boom": {
+  "files": [
+   "boom_1.ogg",
+   "boom_2.ogg"
+  ],
+  "gain": 1,
+  "layer": true
+ },
+ "smallBoom": {
+  "files": [
+   "small_1.ogg",
+   "small_2.ogg"
+  ],
+  "gain": 0.8
+ },
+ "crash": {
+  "files": [
+   "crash_1.ogg",
+   "crash_2.ogg",
+   "crash_3.ogg"
+  ],
+  "gain": 0.9
+ },
+ "wall": {
+  "files": [
+   "wall_1.ogg",
+   "wall_2.ogg"
+  ],
+  "gain": 0.55
+ },
+ "miss": {
+  "files": [],
+  "gain": 0.7
+ },
+ "shield": {
+  "files": [
+   "slimeball_b1366c.wav"
+  ],
+  "gain": 0.7,
+  "layer": false
+ },
+ "shieldHit": {
+  "files": [],
+  "gain": 0.7
+ },
+ "reboot": {
+  "files": [],
+  "gain": 0.7
+ },
+ "lap": {
+  "files": [],
+  "gain": 0.3
+ },
+ "start": {
+  "files": [],
+  "gain": 0.7
+ },
+ "finish": {
+  "files": [],
+  "gain": 0.7
+ },
+ "warn": {
+  "files": [],
+  "gain": 0.7
+ },
+ "blip": {
+  "files": [],
+  "gain": 0.7
+ },
+ "release": {
+  "files": [],
+  "gain": 0.7
+ }
+}

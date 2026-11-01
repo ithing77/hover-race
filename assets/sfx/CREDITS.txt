@@ -1,0 +1,21 @@
+효과음 출처. 엔진·신호음 등은 src/sound.js 에서 합성한다.
+
+boom_1.ogg  ←  100 CC0 SFX  explosion.ogg  CC0  https://opengameart.org/content/100-cc0-sfx
+boom_2.ogg  ←  50 CC0 retro/synth SFX  retro_explosion_02.ogg  CC0  https://opengameart.org/content/50-cc0-retro-synth-sfx
+crash_1.ogg  ←  Kenney Impact Sounds  impactMetal_heavy_000.ogg  CC0  https://kenney.nl/assets/impact-sounds
+crash_2.ogg  ←  Kenney Impact Sounds  impactMetal_heavy_002.ogg  CC0  https://kenney.nl/assets/impact-sounds
+crash_3.ogg  ←  Kenney Impact Sounds  impactPlate_heavy_001.ogg  CC0  https://kenney.nl/assets/impact-sounds
+gun_1.ogg  ←  100 CC0 SFX  shot_01.ogg  CC0  https://opengameart.org/content/100-cc0-sfx
+gun_2.ogg  ←  100 CC0 SFX  shot_02.ogg  CC0  https://opengameart.org/content/100-cc0-sfx
+hit_1.ogg  ←  Kenney Impact Sounds  impactMetal_light_000.ogg  CC0  https://kenney.nl/assets/impact-sounds
+hit_2.ogg  ←  Kenney Impact Sounds  impactMetal_light_002.ogg  CC0  https://kenney.nl/assets/impact-sounds
+hit_3.ogg  ←  Kenney Impact Sounds  impactMetal_light_004.ogg  CC0  https://kenney.nl/assets/impact-sounds
+launch_1.ogg  ←  25 CC0 bang/firework SFX  shot_01.ogg  CC0  https://opengameart.org/content/25-cc0-bangfirework-sfx
+launch_2.ogg  ←  25 CC0 bang/firework SFX  shot_02.ogg  CC0  https://opengameart.org/content/25-cc0-bangfirework-sfx
+rlaunch_2bdece.wav  ←  4 projectile launches  rlaunch.wav  CC BY 3.0 (출처 표시)  https://opengameart.org/content/4-projectile-launches
+shock_1.ogg  ←  Spell sounds (Augmentality)  electricspell.ogg  CC0  
+slimeball_b1366c.wav  ←  4 projectile launches  slimeball.wav  CC BY 3.0 (출처 표시)  https://opengameart.org/content/4-projectile-launches
+small_1.ogg  ←  50 CC0 retro/synth SFX  retro_explosion_01.ogg  CC0  https://opengameart.org/content/50-cc0-retro-synth-sfx
+small_2.ogg  ←  50 CC0 retro/synth SFX  retro_explosion_03.ogg  CC0  https://opengameart.org/content/50-cc0-retro-synth-sfx
+wall_1.ogg  ←  Kenney Impact Sounds  impactPlate_light_000.ogg  CC0  https://kenney.nl/assets/impact-sounds
+wall_2.ogg  ←  Kenney Impact Sounds  impactPlate_light_003.ogg  CC0  https://kenney.nl/assets/impact-sounds
