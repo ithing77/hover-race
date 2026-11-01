@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>부유 경주차 감독</title>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="src/style.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <div class="brand-name" id="brandName">내 팀</div>
+      <div class="muted small" id="trackName"></div>
+    </div>
+    <div class="lap"><span class="muted small" id="lapLabel">바퀴</span> <b id="lapNow">1</b> <span class="muted">/ <span id="lapTotal"></span></span></div>
+    <div class="pips" id="pips"></div>
+    <div class="clock"><div class="muted small" id="clockLabel">경과 시간</div><div id="clock">00:00</div></div>
+    <div class="speeds" id="speeds">
+      <button type="button" data-speed="1">1배속</button>
+      <button type="button" data-speed="2">2배속</button>
+      <button type="button" data-speed="4">4배속</button>
+    </div>
+    <button type="button" class="again" id="restart">다시 달리기</button>
+    <button type="button" class="again" id="toGarage">차고</button>
+  </header>
+  <main class="main">
+    <aside class="side left">
+      <div class="muted small title">순위</div>
+      <div id="standings"></div>
+      <div class="muted small title news-title">소식</div>
+      <div id="news"></div>
+    </aside>
+    <section class="stage"><canvas id="track"></canvas></section>
+    <aside class="side right">
+      <div class="muted small title">무전</div>
+      <div id="radio"></div>
+      <div class="muted small title chassis-title" id="chassisTitle">기체 능력치 · 팀별 최고 바퀴</div>
+      <div id="chassis"></div>
+    </aside>
+  </main>
+  <div class="garage" id="garage">
+    <div class="garage-box">
+      <div class="garage-left">
+        <h2>차고</h2>
+        <label class="choice-label" for="teamName" id="teamNameLabel">팀 이름</label>
+        <input id="teamName" class="team-name" maxlength="14">
+        <div class="money-line" id="moneyLine">돈 <b id="garageMoney"></b> · <span id="garageYear"></span></div>
+        <canvas id="garageCar"></canvas>
+        <div class="muted small" id="garageWeapon"></div>
+        <div id="garageStats"></div>
+        <div class="choice-label" id="colorLabel">팀 색</div>
+        <div class="colors" id="garageColors"></div>
+      </div>
+      <div class="garage-right">
+        <div id="garageSeason"></div>
+        <div class="choices two office-btns" id="officeBtns">
+          <button type="button" id="openResearch">연구소</button>
+          <button type="button" id="openDrivers">드라이버</button>
+        </div>
+        <div id="garageParts"></div>
+        <div id="garageSettings"></div>
+        <button type="button" class="again big go" id="startRace">시즌 시작</button>
+        <button type="button" class="again big" id="startFree">자유 경주</button>
+        <button type="button" class="again big" id="openLobby">친구와 하기</button>
+        <button type="button" class="again big" id="quitSeason">시즌 그만두기</button>
+        <button type="button" class="again big" id="resetAll">처음부터 다시</button>
+      </div>
+    </div>
+  </div>
+  <div class="result" id="lobby" hidden>
+    <div class="result-box">
+      <h2>친구와 하기</h2>
+      <label class="choice-label" for="netName">내 이름 (팀 이름으로 쓰여)</label>
+      <input id="netName" class="team-name" maxlength="14">
+      <button type="button" class="again big go" id="netHost">방 만들기</button>
+      <label class="choice-label qual-label" for="netCode">방 코드</label>
+      <input id="netCode" class="team-name" maxlength="4" autocomplete="off">
+      <button type="button" class="again big" id="netJoin">들어가기</button>
+      <p class="muted small" id="netStatus" role="status"></p>
+      <button type="button" class="again big" id="closeLobby">닫기</button>
+    </div>
+  </div>
+  <div class="net-banner" id="netBanner" role="status" hidden>
+    <span id="netBannerText"></span>
+    <button type="button" class="again" id="netLeave">방 나가기</button>
+  </div>
+  <div class="result" id="office" hidden>
+    <div class="result-box wide">
+      <h2 id="officeTitle"></h2>
+      <div class="money-line">돈 <b id="officeMoney"></b></div>
+      <div id="officeBody"></div>
+      <button type="button" class="again big" id="closeOffice">차고로</button>
+    </div>
+  </div>
+  <div class="result" id="qual" hidden>
+    <div class="result-box wide">
+      <h2 id="qualTitle">예선</h2>
+      <div class="muted small" id="qualDesc"></div>
+      <div id="qualRows"></div>
+      <button type="button" class="again big go" id="qualGo" hidden>경기 시작</button>
+    </div>
+  </div>
+  <div class="result" id="result" hidden>
+    <div class="result-box wide">
+      <h2 id="resultTitle">경기 결과</h2>
+      <div class="muted small result-note" id="resultNote"></div>
+      <div class="tables">
+        <div><div class="muted small title">이번 경기</div><div id="resultRows"></div></div>
+        <div id="seasonTables" class="tables-side"></div>
+      </div>
+      <button type="button" class="again big go" id="nextRace" hidden>다음 경기</button>
+      <button type="button" class="again big" id="restart2">다시 달리기</button>
+      <button type="button" class="again big" id="toGarage2">차고로 가기</button>
+    </div>
+  </div>
+</div>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="src/data.js"></script>
+<script src="src/sim.js"></script>
+<script src="src/season.js"></script>
+<script src="src/career.js"></script>
+<script src="src/art.js"></script>
+<script src="src/render.js"></script>
+<script src="src/net.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>
